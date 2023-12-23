@@ -84,6 +84,15 @@ void init_buttons() {
   check_buttons();  // initialize variables
 }
 
+void flash_leds(const size_t count, const unsigned long delay_ms) {
+  for (size_t c=0; c<count; c++) {
+    if (c) delayMilliseconds(delay_ms);
+    for(size_t i=0; i<BUTTONS; i++) digitalWrite(LEDS[i], HIGH);
+    delayMilliseconds(delay_ms);
+    for(size_t i=0; i<BUTTONS; i++) digitalWrite(LEDS[i], LOW);
+  }
+}
+
 bool check_buttons() {
 #ifdef POLL_TIME_TEST
   const unsigned long now_us = micros();
@@ -187,12 +196,14 @@ void setup() {
   Serial.println(F("========== ==========> Ready! <========== =========="));
   lcd_write("Ready", NULL);
   digitalWrite(LED_BUILTIN, LOW);
+  flash_leds(5, 100);
 }
 
-void gameshow_buzzer() {
+[[noreturn]] void gameshow_buzzer() {
   Serial.println(F("===> Game Show Mode <==="));
   lcd_write(" Game Show Mode ", NULL);
   while (true) {
+    //TODO: Exit by holding two buttons for >2s?
     while (any_pressed()) check_buttons();  // wait for all buttons to be released
     size_t which=0;
     while (!which) if (check_buttons()) which=any_pressed();  // wait for a button to be pressed
@@ -210,20 +221,82 @@ void gameshow_buzzer() {
   }
 }
 
-void loop() {
-  if ( check_buttons() ) {
+void reaction_game() {
+  Serial.println(F("===> Reaction Game <==="));
+  lcd_write(" Reaction Game  ", NULL);
+  flash_leds(1, 1000);
+  randomSeed(micros());
+  const size_t GAME_LENGTH = 8;
+  unsigned long score = 0;  // ULONG_MAX
+  for (size_t game=0; game<GAME_LENGTH; game++) {
+    while (any_pressed()) check_buttons();  // wait for all buttons to be released
+    delayMilliseconds(random(1500));  // delay up to 1.5s
+    const size_t expect = random(BUTTONS);
+    //TODO: prevent having the same button twice in a row with a low delay!
+    size_t pressed=0;
+    const unsigned long start_millis = millis();
+    digitalWrite(LEDS[expect], HIGH);
+    while (!pressed) if (check_buttons()) pressed=any_pressed();  // wait for a button to be pressed
+    const unsigned long time_ms = millis() - start_millis;
+    pressed--;  // any_pressed returns the index+1
+    digitalWrite(LEDS[expect], LOW);
+    if ( pressed==expect ) {
+      score += time_ms;
+      Serial.print(game+1);
+      Serial.print(F(" of "));
+      Serial.print(GAME_LENGTH);
+      Serial.print(F(": "));
+      Serial.print(time_ms);
+      Serial.println("ms");
+    }
+    else {  // wrong button pressed, game failed
+      score = 0;
+      break;
+    }
+  }
+  Serial.print(F("Total score (lower is better): "));
+  Serial.println(score);
+  //TODO: Display score and ask for button press
+  //TODO: Save high score (one per boot, and one permanent)
+  //TODO: Menu option to clear permanent high score
+  flash_leds(3, 250);
+}
+
+[[noreturn]] void debug_loop() {
+  Serial.println(F("===> Debug Mode <==="));
+  lcd_write("   Debug Mode   ", NULL);
+  while (true) {
+    if ( check_buttons() ) {
 #ifdef POLL_TIME_TEST
-    Serial.print("Poll interv. ");
-    Serial.print(cur_poll_interval_us);
-    Serial.println("us");
+      Serial.print("Poll interv. ");
+      Serial.print(cur_poll_interval_us);
+      Serial.println("us");
 #endif
-    for(size_t i=0; i<BUTTONS; i++) {
-      digitalWrite(LEDS[i], btn_cur_state[i] ? HIGH : LOW);
-      if (btn_cur_state[i]) {
-        Serial.print(F("Button "));
-        Serial.println(BTN_NAMES[i]);
+      for(size_t i=0; i<BUTTONS; i++) {
+        digitalWrite(LEDS[i], btn_cur_state[i] ? HIGH : LOW);
+        if (btn_cur_state[i]) {
+          Serial.print(F("Button "));
+          Serial.println(BTN_NAMES[i]);
+        }
       }
     }
   }
-  //TODO: Implement actual game...
+}
+
+void loop() {
+  Serial.println(F("Showing Menu"));
+  lcd_write("R: Reaction Game", "G: Game Show  B>");
+  uint8_t choice = do_menu(MENUFLAG_R|MENUFLAG_G|MENUFLAG_B);
+  if ( choice & MENUFLAG_R )
+    reaction_game();
+  else if ( choice & MENUFLAG_G )
+    gameshow_buzzer();  // noreturn
+  else if ( choice & MENUFLAG_B ) {
+    lcd_write("<B      Y: Debug", NULL);
+    choice = do_menu(MENUFLAG_B|MENUFLAG_Y);
+    if ( choice & MENUFLAG_B )
+      return;
+    else if ( choice & MENUFLAG_Y )
+      debug_loop();  // noreturn
+  }
 }
