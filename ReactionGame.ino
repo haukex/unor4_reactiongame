@@ -42,7 +42,7 @@ void lcd_write(const char *one, const char *two) {
 void init_lcd() {
   lcd.init();
   lcd.backlight();
-  lcd_write("Hello, World!", "This is a test.");
+  lcd_write("Hello, World!", VERSION.c_str());
 }
 
 
@@ -55,9 +55,9 @@ void init_lcd() {
 /* ********** ********** ********** Buttons ********** ********** ********** */
 
 const size_t BUTTONS = 8;
-const char BTN_NAMES[BUTTONS] =  {'R', 'G', 'B', 'Y', 'A', 'C', 'D', 'E'};
-const pin_size_t BTNS[BUTTONS] = { A5,  A4,  A3,  A2,  A1,  A0,  D8,  D9};
-const pin_size_t LEDS[BUTTONS] = { D0,  D1,  D2,  D3,  D4,  D5,  D6,  D7};
+const char BTN_NAMES[BUTTONS] =  { 'R', 'G', 'B', 'Y', 'A', 'C', 'D', 'E'};
+const pin_size_t BTNS[BUTTONS] = { D10, D11,  A3,  A2,  A1,  A0,  D8,  D9};
+const pin_size_t LEDS[BUTTONS] = {  D0,  D1,  D2,  D3,  D4,  D5,  D6,  D7};
 const unsigned long BTN_IGNORE_TIME_MS = 100;  // basic debouncing
 const size_t MENUBTN_R = 0;
 const size_t MENUBTN_G = 1;
@@ -151,7 +151,7 @@ uint8_t do_menu(uint8_t choices) {
 /* ********** ********** ********** Speaker ********** ********** ********** */
 // using a noname speaker driver IC that plays a sound when a pin is set high
 
-#define AUDIO_TRIGGER_PIN D10
+#define AUDIO_TRIGGER_PIN D12
 
 void init_audio() {
   digitalWrite(AUDIO_TRIGGER_PIN, LOW);
@@ -185,22 +185,28 @@ void setup() {
   init_buttons();
 
   Serial.println(F("========== ==========> Ready! <========== =========="));
+  lcd_write("Ready", NULL);
   digitalWrite(LED_BUILTIN, LOW);
 }
 
 void gameshow_buzzer() {
-  Serial.println("===> Game Show Mode");
-  lcd_write("Game Show Mode", NULL);
+  Serial.println(F("===> Game Show Mode <==="));
+  lcd_write(" Game Show Mode ", NULL);
   while (true) {
     while (any_pressed()) check_buttons();  // wait for all buttons to be released
     size_t which=0;
     while (!which) if (check_buttons()) which=any_pressed();  // wait for a button to be pressed
     // react to the button press
-    digitalWrite(LEDS[which-1], HIGH);
+    which--;  // any_pressed returns the index+1
+    digitalWrite(LEDS[which], HIGH);
     play_audio();
-    //TODO: Also display pressed button on display
-    delayMilliseconds(4000);
-    digitalWrite(LEDS[which-1], LOW);
+    Serial.print(F("Button "));
+    Serial.println(BTN_NAMES[which]);
+    char btnstr[] = " => Button _ <= ";
+    btnstr[11] = BTN_NAMES[which];
+    lcd_write(" Game Show Mode ", btnstr);
+    delayMilliseconds(3000);
+    digitalWrite(LEDS[which], LOW);
   }
 }
 
@@ -214,7 +220,7 @@ void loop() {
     for(size_t i=0; i<BUTTONS; i++) {
       digitalWrite(LEDS[i], btn_cur_state[i] ? HIGH : LOW);
       if (btn_cur_state[i]) {
-        Serial.print("Button ");
+        Serial.print(F("Button "));
         Serial.println(BTN_NAMES[i]);
       }
     }
