@@ -299,6 +299,8 @@ void reaction_game(const size_t game_length) {
   }
   else if ( score < cur_high_score ) {
     cur_high_score = score;
+    //TODO Later: For some reason the audio doesn't play the first time after boot...?
+    // (it's not too bad because the user always gets a "Good Score!" message anyway...)
     play_audio();
     flash_leds(5, 150);
   }
