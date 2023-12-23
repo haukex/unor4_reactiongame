@@ -28,11 +28,15 @@ const String VERSION = String("$Id$").substring(5,13);
 LiquidCrystal_I2C lcd(0x27,16,2); // address, width, height
 
 void lcd_write(const char *one, const char *two) {
-  // the following code takes ~48ms (measured)
-  lcd.setCursor(0,0); // col, row
-  lcd.print(one);
-  lcd.setCursor(0,1);
-  lcd.print(two);
+  lcd.clear();
+  if (one!=NULL) {
+    lcd.setCursor(0,0); // col, row
+    lcd.print(one);
+  }
+  if (two!=NULL) {
+    lcd.setCursor(0,1);
+    lcd.print(two);
+  }
 }
 
 void init_lcd() {
@@ -101,25 +105,20 @@ bool check_buttons() {
   return any_changes;
 }
 
+size_t any_pressed() {
+  for (size_t i=0; i<BUTTONS; i++)
+    if (btn_cur_state[i]) return i+1;
+  return 0;
+}
+
 const uint8_t MENUFLAG_R = 0b00000001;
 const uint8_t MENUFLAG_G = 0b00000010;
 const uint8_t MENUFLAG_B = 0b00000100;
 const uint8_t MENUFLAG_Y = 0b00001000;
 
-void _wait_menubtn_release(uint8_t choices) {
-  while (
-         ( choices & MENUFLAG_R ) && btn_cur_state[MENUBTN_R]
-      || ( choices & MENUFLAG_G ) && btn_cur_state[MENUBTN_G]
-      || ( choices & MENUFLAG_B ) && btn_cur_state[MENUBTN_B]
-      || ( choices & MENUFLAG_Y ) && btn_cur_state[MENUBTN_Y]
-    ) {
-    while (!check_buttons());
-  }
-}
-
 uint8_t do_menu(uint8_t choices) {
   // wait for buttons to be released if pressed
-  _wait_menubtn_release(choices);
+  while (any_pressed()) check_buttons();
   // turn on the choice LEDs
   if ( choices & MENUFLAG_R ) digitalWrite(LEDS[MENUBTN_R], HIGH);
   if ( choices & MENUFLAG_G ) digitalWrite(LEDS[MENUBTN_G], HIGH);
@@ -141,7 +140,7 @@ uint8_t do_menu(uint8_t choices) {
   digitalWrite(LEDS[MENUBTN_B], chose&MENUFLAG_B ? HIGH : LOW);
   digitalWrite(LEDS[MENUBTN_Y], chose&MENUFLAG_Y ? HIGH : LOW);
   // turn off the selected LED after button is released
-  _wait_menubtn_release(choices);
+  while (any_pressed()) check_buttons();
   digitalWrite(LEDS[MENUBTN_R], LOW);
   digitalWrite(LEDS[MENUBTN_G], LOW);
   digitalWrite(LEDS[MENUBTN_B], LOW);
@@ -187,6 +186,22 @@ void setup() {
 
   Serial.println(F("========== ==========> Ready! <========== =========="));
   digitalWrite(LED_BUILTIN, LOW);
+}
+
+void gameshow_buzzer() {
+  Serial.println("===> Game Show Mode");
+  lcd_write("Game Show Mode", NULL);
+  while (true) {
+    while (any_pressed()) check_buttons();  // wait for all buttons to be released
+    size_t which=0;
+    while (!which) if (check_buttons()) which=any_pressed();  // wait for a button to be pressed
+    // react to the button press
+    digitalWrite(LEDS[which-1], HIGH);
+    play_audio();
+    //TODO: Also display pressed button on display
+    delayMilliseconds(4000);
+    digitalWrite(LEDS[which-1], LOW);
+  }
 }
 
 void loop() {
