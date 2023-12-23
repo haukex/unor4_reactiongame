@@ -11,7 +11,7 @@
 /* ********** ********** ********** Globals ********** ********** ********** */
 #include <limits.h>
 
-const String VERSION = String("$Id$").substring(5,13);
+const String VERSION = String("$Id$").substring(5,21);
 
 #define delayMilliseconds(x)   delay(x)
 
@@ -43,7 +43,6 @@ void lcd_write(const char *one, const char *two) {
 void init_lcd() {
   lcd.init();
   lcd.backlight();
-  lcd_write("Hello, World!", VERSION.c_str());
 }
 
 
@@ -249,7 +248,7 @@ size_t prev_game_length = 0;
 
 void reaction_game(const size_t game_length) {
   Serial.println(F("===> Reaction Game <==="));
-  lcd_write(" Reaction Game  ", NULL);
+  lcd_write(" Reaction Game  ", " in progress... ");
   if ( game_length>prev_game_length ) cur_high_score = ULONG_MAX;
   prev_game_length = game_length;
   flash_leds(1, GAME_MAX_DELAY_MS);
@@ -316,7 +315,7 @@ void reaction_game(const size_t game_length) {
 
 [[noreturn]] void debug_loop() {
   Serial.println(F("===> Debug Mode <==="));
-  lcd_write("   Debug Mode   ", NULL);
+  lcd_write("   Debug Mode   ", VERSION.c_str());
   while (true) {
     if ( check_buttons() ) {
 #ifdef POLL_TIME_TEST
