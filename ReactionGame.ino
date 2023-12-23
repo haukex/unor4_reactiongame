@@ -9,6 +9,7 @@
  */
 
 /* ********** ********** ********** Globals ********** ********** ********** */
+#include <limits.h>
 
 const String VERSION = String("$Id$").substring(5,13);
 
@@ -49,7 +50,19 @@ void init_lcd() {
 /* ********** ********** ********** EEPROM ********** ********** ********** */
 #include <EEPROM.h>
 
-//TODO: Read/write high score
+//TODO Later: there should probably be a different high score per game length
+const int EE_HISCORE_ADDR = 0;
+unsigned long ee_high_score;
+
+void init_hiscore() {
+  EEPROM.get(EE_HISCORE_ADDR, ee_high_score);
+  Serial.print(F("Loaded high score: "));
+  Serial.println(ee_high_score);
+}
+
+void save_hiscore() {
+  EEPROM.put(EE_HISCORE_ADDR, ee_high_score);
+}
 
 
 /* ********** ********** ********** Buttons ********** ********** ********** */
@@ -174,7 +187,7 @@ void play_audio() {
 }
 
 
-/* ********** ********** ********** Main Code ********** ********** ********** */
+/* ********** ********** ********** Initialization ********** ********** ********** */
 
 void setup() {
   Serial.begin(115200);
@@ -182,8 +195,8 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   //while (!Serial);  // no, don't wait for USB-Serial connection to boot
   // instead, just wait a few seconds for PC to catch up if connected:
-  //TODO: remove delay for prod
-  delayMilliseconds(3000);
+  // (BUT in this application we'll rarely be connected to a PC, so don't delay)
+  //delayMilliseconds(3000);
   Serial.setTimeout(SERIAL_TIMEOUT_MS);
   Serial.println(F("==========> Booting..."));
   Serial.print(F("Firmware version: "));
@@ -192,12 +205,16 @@ void setup() {
   init_lcd(); // NOTE this hangs if LCD not connected
   init_audio();
   init_buttons();
+  init_hiscore();
 
   Serial.println(F("========== ==========> Ready! <========== =========="));
   lcd_write("Ready", NULL);
   digitalWrite(LED_BUILTIN, LOW);
   flash_leds(5, 100);
 }
+
+
+/* ********** ********** ********** Game Show Mode ********** ********** ********** */
 
 [[noreturn]] void gameshow_buzzer() {
   Serial.println(F("===> Game Show Mode <==="));
@@ -221,18 +238,28 @@ void setup() {
   }
 }
 
-void reaction_game() {
+
+/* ********** ********** ********** Reaction Game ********** ********** ********** */
+
+const unsigned long GAME_MAX_DELAY_MS = 1000;  // should be 1000-2000
+unsigned long cur_high_score = ULONG_MAX;
+size_t prev_game_length = 0;
+
+//TODO Later: consider a reaction game with only 4 buttons?
+
+void reaction_game(const size_t game_length) {
   Serial.println(F("===> Reaction Game <==="));
   lcd_write(" Reaction Game  ", NULL);
-  flash_leds(1, 1000);
+  if ( game_length>prev_game_length ) cur_high_score = ULONG_MAX;
+  prev_game_length = game_length;
+  flash_leds(1, GAME_MAX_DELAY_MS);
   randomSeed(micros());
-  const size_t GAME_LENGTH = 8;
-  unsigned long score = 0;  // ULONG_MAX
-  for (size_t game=0; game<GAME_LENGTH; game++) {
+  unsigned long score = 0;
+  size_t prev_btn = BUTTONS;
+  for (size_t game=0; game<game_length; game++) {
     while (any_pressed()) check_buttons();  // wait for all buttons to be released
-    delayMilliseconds(random(1500));  // delay up to 1.5s
     const size_t expect = random(BUTTONS);
-    //TODO: prevent having the same button twice in a row with a low delay!
+    delayMilliseconds( expect==prev_btn ? random(500, GAME_MAX_DELAY_MS) : random(GAME_MAX_DELAY_MS) );
     size_t pressed=0;
     const unsigned long start_millis = millis();
     digitalWrite(LEDS[expect], HIGH);
@@ -244,23 +271,48 @@ void reaction_game() {
       score += time_ms;
       Serial.print(game+1);
       Serial.print(F(" of "));
-      Serial.print(GAME_LENGTH);
+      Serial.print(game_length);
       Serial.print(F(": "));
       Serial.print(time_ms);
       Serial.println("ms");
     }
     else {  // wrong button pressed, game failed
-      score = 0;
+      score = ULONG_MAX;
       break;
     }
+    prev_btn = expect;
   }
+
   Serial.print(F("Total score (lower is better): "));
   Serial.println(score);
-  //TODO: Display score and ask for button press
-  //TODO: Save high score (one per boot, and one permanent)
-  //TODO: Menu option to clear permanent high score
-  flash_leds(3, 250);
+
+  char dispscore[] = "                ";
+  // unsigned long range is 0-4294967295 (10 chars)
+  snprintf(dispscore, 17, "%10u ms", score);
+  lcd_write( score < ee_high_score ? "!! HIGH SCORE !!" :
+    ( score < cur_high_score ? "   Good Score!  " : "   Your score:  " ) , dispscore);
+
+  if ( score < ee_high_score ) {
+    ee_high_score = score;
+    save_hiscore();
+    play_audio();
+    flash_leds(15, 50);
+  }
+  else if ( score < cur_high_score ) {
+    cur_high_score = score;
+    play_audio();
+    flash_leds(5, 150);
+  }
+  else {
+    flash_leds(3, 250);
+  }
+
+  if ( score<ULONG_MAX )
+    do_menu(MENUFLAG_R);
 }
+
+
+/* ********** ********** ********** Debug Loop ********** ********** ********** */
 
 [[noreturn]] void debug_loop() {
   Serial.println(F("===> Debug Mode <==="));
@@ -283,20 +335,40 @@ void reaction_game() {
   }
 }
 
+
+/* ********** ********** ********** Main Menu ********** ********** ********** */
+
 void loop() {
   Serial.println(F("Showing Menu"));
-  lcd_write("R: Reaction Game", "G: Game Show  B>");
-  uint8_t choice = do_menu(MENUFLAG_R|MENUFLAG_G|MENUFLAG_B);
-  if ( choice & MENUFLAG_R )
-    reaction_game();
-  else if ( choice & MENUFLAG_G )
+  lcd_write("R: Reaction Game", "G: Game Show  Y>");
+  uint8_t choice = do_menu(MENUFLAG_R|MENUFLAG_G|MENUFLAG_Y);
+  if ( choice & MENUFLAG_R ) {  // "R: Reaction Game"
+    lcd_write("R:Short/8   G:32", "B: Long/64    <Y");
+    choice = do_menu(MENUFLAG_R|MENUFLAG_G|MENUFLAG_B|MENUFLAG_Y);
+    if ( choice & MENUFLAG_R ) reaction_game(8);
+    else if ( choice & MENUFLAG_G ) reaction_game(32);
+    else if ( choice & MENUFLAG_B ) reaction_game(64);
+  }
+  else if ( choice & MENUFLAG_G )  // "G: Game Show"
     gameshow_buzzer();  // noreturn
-  else if ( choice & MENUFLAG_B ) {
-    lcd_write("<B      Y: Debug", NULL);
-    choice = do_menu(MENUFLAG_B|MENUFLAG_Y);
-    if ( choice & MENUFLAG_B )
-      return;
-    else if ( choice & MENUFLAG_Y )
+  else if ( choice & MENUFLAG_Y ) {  // "Y>"
+    lcd_write("R: High Score   ", "B: Debug      <Y");
+    choice = do_menu(MENUFLAG_R|MENUFLAG_B|MENUFLAG_Y);
+    if ( choice & MENUFLAG_R ) {  // "R: High Score"
+      char dispscore[] = "                ";
+      snprintf(dispscore, 17, "%u ms", ee_high_score);
+      lcd_write(dispscore, "B: Clear      <Y");
+      choice = do_menu(MENUFLAG_B|MENUFLAG_Y);
+      if ( choice & MENUFLAG_B ) {  // "B: Clear"
+        lcd_write("Are you sure?   ", "G: Yes     Y: No");
+        choice = do_menu(MENUFLAG_G|MENUFLAG_Y);
+        if ( choice & MENUFLAG_G ) {  // "G: Yes"
+          ee_high_score = ULONG_MAX;
+          save_hiscore();
+        }
+      }
+    }
+    else if ( choice & MENUFLAG_B )  // "B: Debug"
       debug_loop();  // noreturn
   }
 }
