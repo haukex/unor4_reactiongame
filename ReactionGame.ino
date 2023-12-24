@@ -218,6 +218,7 @@ void setup() {
 [[noreturn]] void gameshow_buzzer() {
   Serial.println(F("===> Game Show Mode <==="));
   lcd_write(" Game Show Mode ", NULL);
+  randomSeed(micros());
   while (true) {
     //TODO: Exit by holding two buttons for >2s?
     while (any_pressed()) check_buttons();  // wait for all buttons to be released
@@ -232,7 +233,8 @@ void setup() {
     char btnstr[] = " => Button _ <= ";
     btnstr[11] = BTN_NAMES[which];
     lcd_write(" Game Show Mode ", btnstr);
-    delayMilliseconds(3000);
+    delayMilliseconds(2000);
+    delayMilliseconds(random(1000));
     digitalWrite(LEDS[which], LOW);
   }
 }
