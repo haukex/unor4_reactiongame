@@ -307,6 +307,7 @@ void reaction_game(const size_t game_length) {
   char dispscore[] = "                ";
   // unsigned long range is 0-4294967295 (10 chars)
   snprintf(dispscore, 17, "%10u ms", score);
+  //TODO: Displaying the average reaction time would be nice too
   lcd_write( score < ee_high_score ? "!! HIGH SCORE !!" :
     ( score < cur_high_score ? "   Good Score!  " : "   Your score:  " ) , dispscore);
 
@@ -329,6 +330,7 @@ void reaction_game(const size_t game_length) {
 
   if ( score<ULONG_MAX )
     do_menu(MENUFLAG_R);
+  //TODO Later: else, display a message that the game was failed so user knows
 }
 
 
