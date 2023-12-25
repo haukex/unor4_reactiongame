@@ -122,7 +122,11 @@ void flash_leds(const size_t count, const unsigned long delay_ms) {
   }
 }
 
-bool check_buttons() {
+bool check_buttons() {  // call in a tight loop!
+  /* Note: I think I could probably also use interrupts, see e.g.
+   * https://github.com/TriodeGirl/Arduino-UNO-R4-code-for-general-method-to-attach-an-interrupt-to-ANY-event
+   * but since in this case polling is much faster than the button presses (roughly 50 checks per ms),
+   * that's good enough and probably easier to implement that custom interrupt code. */
 #ifdef POLL_TIME_TEST
   const unsigned long now_us = micros();
   cur_poll_interval_us = now_us - prev_poll_time_us;
