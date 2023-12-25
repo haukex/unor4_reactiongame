@@ -1,11 +1,28 @@
-/** Main Arduino Sketch.
+/** "Reaction Game" Arudino Sketch.
  *
  * Dev Notes:
- * - millis() and micros() are unsigned long, which is uint32_t. millis overflow is 49.7 days, micros is 71.6 minutes.
- * - Normal, fast button presses got down to 20-30ms, but with very quick presses I was able to get down to 8-9ms with some bouncing.
- * - Testing with POLL_TIME_TEST showed a polling interval of around 20us, which is fast enough.
  *
- * Copyright © 2023 by Hauke Dämpfling (haukex@zero-g.net). All Rights Reserved.
+ * - millis() and micros() are unsigned long, which is uint32_t. millis
+ *   overflow is 49.7 days, micros is 71.6 minutes.
+ * - With the buttons I'm using, fast button presses got down to ~20ms, but
+ *   with very quick presses I was able to get down to ~8ms with some bouncing.
+ * - Testing with POLL_TIME_TEST showed a polling interval of around 20us,
+ *   which is fast enough.
+ *
+ * Copyright © 2023 by Hauke Dämpfling (haukex@zero-g.net).
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 /* ********** ********** ********** Globals ********** ********** ********** */
